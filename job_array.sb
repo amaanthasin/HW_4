@@ -6,6 +6,6 @@
 #SBATCH --mem=2G
 #SBATCH --array=1-50
 
-module load OpenMPI  # Adjust if needed on HPCC
+module load OpenMPI  
 
 mpirun -np 1 ./revGOL_mpi cmse2.txt ${SLURM_ARRAY_TASK_ID}
