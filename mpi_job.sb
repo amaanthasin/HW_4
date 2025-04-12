@@ -1,0 +1,14 @@
+#!/bin/bash --login
+#SBATCH --job-name=mpi_basic
+#SBATCH --nodes=3
+#SBATCH --ntasks=50
+#SBATCH --time=00:10:00
+#SBATCH --mem=100G
+#SBATCH --output=mpi_basic_output.txt
+
+module purge
+module load OpenMPI
+
+mpicc -o reverseGOL_mpi reverseGOL-mpi.c -lm
+
+mpirun -np 50 ./reverseGOL_mpi cmse2.txt > mpi_basic_best.txt
