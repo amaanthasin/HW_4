@@ -155,6 +155,7 @@ int main(int argc, char *argv[]) {
     char * target_plate;  
  
     target_plate = readplate(argv[1], &n);    
+    int plate_size = (n + 2) * (n + 2);
     buffer_plate = (char *) calloc((n+2)*(n+2),sizeof(char)); 
 
     char * population[local_npop];
@@ -204,6 +205,37 @@ int main(int argc, char *argv[]) {
         int rate = (int) ((double) pop_fitness[best]/(n*n) * 100);
 
         for(int i=0; i <local_npop; i++) {
+// Round-robin neighbor sharing
+int neighbor_rank_send = (rank + 1) % size;
+int neighbor_rank_recv = (rank == 0) ? size - 1 : rank - 1;
+
+// Allocate space for neighbor data
+char *neighbor_plate = (char *)malloc(plate_size * sizeof(char));
+int neighbor_fitness;
+
+if (rank == 0) {
+    // Rank 0 receives first to avoid deadlock
+    MPI_Recv(&neighbor_fitness, 1, MPI_INT, neighbor_rank_recv, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(neighbor_plate, plate_size, MPI_CHAR, neighbor_rank_recv, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Send(&pop_fitness[best], 1, MPI_INT, neighbor_rank_send, 2, MPI_COMM_WORLD);
+    MPI_Send(population[best], plate_size, MPI_CHAR, neighbor_rank_send, 3, MPI_COMM_WORLD);
+} else {
+    // Other ranks send first then receive
+    MPI_Send(&pop_fitness[best], 1, MPI_INT, neighbor_rank_send, 2, MPI_COMM_WORLD);
+    MPI_Send(population[best], plate_size, MPI_CHAR, neighbor_rank_send, 3, MPI_COMM_WORLD);
+    MPI_Recv(&neighbor_fitness, 1, MPI_INT, neighbor_rank_recv, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(neighbor_plate, plate_size, MPI_CHAR, neighbor_rank_recv, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+}
+
+// If neighbor's best is better, replace our current best
+if (neighbor_fitness < pop_fitness[best]) {
+    memcpy(population[sbest], population[best], plate_size); // move old best to sbest
+    memcpy(population[best], neighbor_plate, plate_size);    // update best
+    pop_fitness[best] = neighbor_fitness;
+}
+
+free(neighbor_plate);
+
             if (i == sbest) {
 		cross(population[i], population[best],  n); 
 		sbest = 1;
@@ -224,10 +256,6 @@ int main(int argc, char *argv[]) {
 
 
     int final_fitness = pop_fitness[best];
-
-
-
-    int plate_size = (n + 2) * (n + 2);
 
     if (rank != 0) {
         MPI_Send(&final_fitness, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
